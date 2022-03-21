@@ -72,7 +72,7 @@ spec:
       - command:
         - /usr/local/bin/kube-scheduler
         - --config=/etc/kubernetes/llocality-scheduler/llocality-scheduler-config.yaml
-        - -v=5
+        - -v=10
         image: docker.io/ryaxtech/kube-scheduler-llocality:v1.22.6
         imagePullPolicy: Always
         livenessProbe:

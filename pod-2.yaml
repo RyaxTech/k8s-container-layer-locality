@@ -8,4 +8,6 @@ spec:
   schedulerName: llocality-scheduler
   containers:
   - name: pod-with-second-annotation-container
-    image: k8s.gcr.io/pause:2.0
+    image: docker.io/library/python@sha256:460573a11357df4f338df5b5afe8ac1fddb6338391a318296fe9b13bd919319b
+      #nodeSelector:
+      #  kubernetes.io/hostname: crio-worker
