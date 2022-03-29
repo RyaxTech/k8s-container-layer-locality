@@ -198,7 +198,7 @@ kind create cluster --name crio --config kind-crio.yaml
 ```
 
 Inside the cri-o repository, replace the Cri-o executable by ours with:
-```
+``` 
 for n in $(kind get nodes --name crio); do
   docker cp ./result/bin/crio $n:/usr/bin/crio
   docker exec $n systemctl restart crio
@@ -233,6 +233,170 @@ Fix the coredns image name (use a hardcoded subpath `coredns/coredns` unsupporte
 ```
 kubectl set image -n kube-system deployment/coredns coredns=docker.io/ryaxtech/coredns:v1.8.0
 ```
+
+### Test in OpenShift
+
+To be able to install our custom Kubernetes and Cri-O versions into OpenShift
+we have to tweak some Openshift elements:
+- the Fedora CoreOS (FCOS) image used by OKD to add our modified cri-o and kubelet.
+- the containers of the Kubernetes control plane (api-server and
+  controller-manager)
+- the installer configuration to use our custom container images. Doc reference on customization:
+  https://github.com/openshift/installer/blob/master/docs/user/customization.md#image-content-sources
+
+#### Mirroring the images
+
+To be able to customize the OKD (OpenShift Kubernetes Distribution) we have to
+use custom images with our modified Kubernetes version instead of the official
+ones.
+
+> Selete the OKD version by setting the VERSION with one of the image tag of the repository:
+> https://quay.io/repository/openshift/okd?tab=tags
+
+To do so, first we copy **all** the official images from the RedHat OKD
+repository to our own custom repository with the script (10GB
+of disk space is required):
+```sh
+./mirror-images.sh
+```
+
+#### Create custom image for Kubernetes
+
+First, create a backup of the Hyperkube image that contains all the Kubernetes
+binaries.
+```sh
+docker pull registry-1.ryax.org/research/physics-openshift:hyperkube
+docker tag registry-1.ryax.org/research/physics-openshift:hyperkube registry-1.ryax.org/research/physics-openshift:hyperkube-old
+docker push registry-1.ryax.org/research/physics-openshift:hyperkube-old
+```
+
+**Put all the modified binaries in the local `./bin` directory.**
+
+Now create the custom image with this Dockerfile:
+```sh
+FROM registry-1.ryax.org/research/physics-openshift:hyperkube-old
+
+ADD ./bin/kube-apiserver /usr/bin/kube-apiserver
+ADD ./bin/kube-controller-manager /usr/bin/kube-controller-manager
+ADD ./bin/kubelet /usr/bin/kubelet
+```
+Build it with
+```sh
+docker build . -t registry-1.ryax.org/research/physics-openshift:hyperkube
+docker push registry-1.ryax.org/research/physics-openshift:hyperkube
+```
+
+#### Create custom image for FCOS (Cri-o)
+
+To add our own Cri-O to the FCOS image we need to create an RPM repository with
+our packages inside.
+
+The full process is:
+1. [X] create a RPM package for Cri-o
+2. [ ] create a RPM package for kubelet
+3. [-] include this package in fork of OKD FCOS image
+4. [ ] build the new image and make it accessible
+5. [ ] configure the openshift installer to use our custom FCOS
+
+##### Create Crio RPM with Nix (ABANDONED)
+
+Build the RPM package for Cri-O with:
+```
+nix bundle -f ./nix --bundler github:NixOS/bundlers#toRPM
+```
+
+But with the nix approach the RPM generated package was not compatible with
+rpm-ostree:
+```
+(rpm-ostree compose tree:242): GLib-WARNING **: 08:12:45.147: GError set over the top of a previous GError or uninitialized memory.                                                                                                                                                       
+This indicates a bug in someone's code. You must ensure an error is NULL before it's set.                                                                                                                                                                                                 
+The overwriting error message was: Analyzing /nix/store/xwlbvhhaqvccakfvvf5y4jbk5a5y8vqd-cyrus-sasl-2.1.27/lib/sasl2/libplain.la: Unsupported path; see https://github.com/projectatomic/rpm-ostree/issues/233
+```
+
+##### Create Cri-o RPM from the source RPM
+
+Create a tarball of the Cri-o source on the right format:
+```sh
+mkdir rpms-source
+pushd $CRIO_SOURCE_DIR
+tar --exclude-vcs --exclude-vcs-ignores --exclude="_output" --exclude="build" -cvzf cri-o.tar.gz ./cri-o-1.23.2
+popd
+cp $CRIO_SOURCE_DIR/cri-o.tar.gz ./rpms-source
+```
+Get the source RPM and unpack the it with:
+```sh
+cd rpms-source
+wget https://fr2.rpmfind.net/linux/fedora/linux/development/rawhide/Everything/source/tree/Packages/c/cri-o-1.23.2-1.fc37.src.rpm
+rpm2cpio cri-o-1.23.2-1.fc37.src.rpm | cpio -idmv --no-absolute-filenames
+```
+Run a container with fedora to have the RPM tools:
+```sh
+podman run -ti -v $PWD:/tmp/host -v fedora
+```
+Inside that container install dependencies:
+```sh
+yum install -y btrfs-progs-devel device-mapper-devel git-core glib2-devel glibc-static go-md2man go-rpm-macros gpgme-devel libassuan-devel libseccomp-devel make systemd-rpm-macros
+```
+Change the spec file so it uses our tarball (line 45-46):
+```
+URL:            https://github.com/RyaxTech/cri-o
+Source0:        %{name}.tar.gz
+```
+
+Now run the build:
+```sh
+cd /tmp/host
+rpmbuild -ba -r $PWD/build cri-o.spec
+```
+
+Copy it the final rpm repo:
+```sh
+mkdir -m 777 rpms
+cp RPMS/* ./rpms
+```
+##### Create Kubelet RPM from the source RPM
+
+> TODO
+
+
+#### Build the FCOS image
+
+Reference:
+https://blog.cubieserver.de/2021/building-a-custom-okd-machine-os-image/
+
+Get our version of the okd machine repo and put the rpms in it:
+```
+git pull https://github.com/RyaxTech/okd-machine-os
+cd okd-machine-os
+cp -r ../rpms .
+```
+
+Do the build of FCOS (change the user/registry/repo if
+needed):
+```sh
+podman build -f Dockerfile.cosa -t fcos-builder
+export REGISTRY_PASSWORD=$(cat $HOME/.docker/config.json | jq '.auths["registry-1.ryax.org"].auth' -r | base64 -d | cut -f2 -d':')
+podman run -e REGISTRY_PASSWORD -e USERNAME=michael.mercier -e REGISTRY=registry-1.ryax.org -e REPOSITORY=research -e VERSION=411.35.test -v /dev/kvm:/dev/kvm --privileged -ti --entrypoint /bin/sh localhost/fcos-builder -i
+```
+In the container run:
+```sh
+# Patch the coreos assembler to avoid this error:
+# tar: ./tmp/build/coreos-assembler-config.tar.gz: file changed as we read it
+RUN sed -i 's#--exclude-vcs#--exclude-vcs --exclude=./tmp/build/coreos-assembler-config.tar.gz#' /usr/lib/coreos-assembler/cmdlib.sh
+./entrypoint.sh
+```
+
+> This is failing with 
+
+#### On Azure
+
+Not possible using the openshift-installer due to this bug:
+https://github.com/openshift/installer/issues/4986
+
+#### On AWS
+
+TODO
+
 
 #### Testing scenario
 

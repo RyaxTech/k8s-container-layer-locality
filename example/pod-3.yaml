@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: annotation-second-scheduler-base-image
+  name: base-image-llocality-scheduler
   labels:
     name: multischeduler-example
 spec:
@@ -9,3 +9,9 @@ spec:
   containers:
   - name: pod-with-second-annotation-container
     image: docker.io/library/debian@sha256:039f72a400b48c272c6348f0a3f749509b18e611901a21379abc7eb6edd53392
+    command:
+      - sleep
+      - "10000"
+    resources:
+      requests:
+        cpu: "4000m"

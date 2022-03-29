@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: first-pod-locality-scheduler
+  labels:
+    name: multischeduler-example
+spec:
+  schedulerName: llocality-scheduler
+  containers:
+  - name: pod-with-second-annotation-container
+    image: docker.io/library/python@sha256:460573a11357df4f338df5b5afe8ac1fddb6338391a318296fe9b13bd919319b
+    command:
+      - sleep
+      - "10000"
+    resources:
+      requests:
+        cpu: "8000m"
+
+    #nodeSelector:
+    #  kubernetes.io/hostname: crio-worker

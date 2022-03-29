@@ -30,3 +30,10 @@ nodes:
     kind: JoinConfiguration
     nodeRegistration:
       criSocket: unix:///var/run/crio/crio.sock
+- role: worker
+  image: quay.io/aojea/kindnode:crio1639620432
+  kubeadmConfigPatches:
+  - |
+    kind: JoinConfiguration
+    nodeRegistration:
+      criSocket: unix:///var/run/crio/crio.sock
