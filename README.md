@@ -87,7 +87,7 @@ You should see that the annotation map contains one common key because the pytho
 "imageLayer.sha256:0c6b8ff8c37e92eb1ca65ed8917e818927d5bf318b6f18896049b5d9afc28343": "54917164",
 ```
 
-#### (Optional) Create container images for custom K8s services
+### (Optional) Create container images for custom K8s services
 
 
 > Only do this step if you have modified the Kubernetes code. Mind to update the version...
