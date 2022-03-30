@@ -382,11 +382,15 @@ In the container run:
 ```sh
 # Patch the coreos assembler to avoid this error:
 # tar: ./tmp/build/coreos-assembler-config.tar.gz: file changed as we read it
-RUN sed -i 's#--exclude-vcs#--exclude-vcs --exclude=./tmp/build/coreos-assembler-config.tar.gz#' /usr/lib/coreos-assembler/cmdlib.sh
+sed -i 's#\(tar.*--exclude-vcs .\)#\1 || true#' /usr/lib/coreos-assembler/cmdlib.sh
 ./entrypoint.sh
 ```
 
-> This is failing with 
+> FIXME: This is failing with this error:
+> ```
+> Caught error, waiting for outstanding tasks
+> error: Copying from build repo into target repo: Opening content object a4e1470734feaf65a3f90a703338c3d0fc6236bafbb88b40039ae607a5eef513: fstat: Not a directory
+```
 
 #### On Azure
 
