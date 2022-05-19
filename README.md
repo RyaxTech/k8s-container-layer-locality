@@ -322,20 +322,21 @@ pushd $CRIO_SOURCE_DIR
 tar --exclude-vcs --exclude-vcs-ignores --exclude="_output" --exclude="build" -cvzf cri-o.tar.gz ./cri-o-1.23.2
 popd
 cp $CRIO_SOURCE_DIR/cri-o.tar.gz ./rpms-source
-```
-Get the source RPM and unpack the it with:
-```sh
 cd rpms-source
-wget https://fr2.rpmfind.net/linux/fedora/linux/development/rawhide/Everything/source/tree/Packages/c/cri-o-1.23.2-1.fc37.src.rpm
-rpm2cpio cri-o-1.23.2-1.fc37.src.rpm | cpio -idmv --no-absolute-filenames
 ```
 Run a container with fedora to have the RPM tools:
 ```sh
-podman run -ti -v $PWD:/tmp/host -v fedora
+podman run -ti -v $PWD:/tmp/host fedora
 ```
 Inside that container install dependencies:
 ```sh
-yum install -y btrfs-progs-devel device-mapper-devel git-core glib2-devel glibc-static go-md2man go-rpm-macros gpgme-devel libassuan-devel libseccomp-devel make systemd-rpm-macros
+yum install -y btrfs-progs-devel device-mapper-devel git-core glib2-devel glibc-static go-md2man go-rpm-macros gpgme-devel libassuan-devel libseccomp-devel make systemd-rpm-macros wget cpio
+```
+Get the source RPM and unpack the it with:
+```sh
+cd /tmp/host
+wget https://fr2.rpmfind.net/linux/fedora/linux/development/rawhide/Everything/source/tree/Packages/c/cri-o-1.23.2-1.fc37.src.rpm
+rpm2cpio cri-o-1.23.2-1.fc37.src.rpm | cpio -idmv --no-absolute-filenames
 ```
 Change the spec file so it uses our tarball (line 45-46):
 ```
@@ -345,7 +346,6 @@ Source0:        %{name}.tar.gz
 
 Now run the build:
 ```sh
-cd /tmp/host
 rpmbuild -ba -r $PWD/build cri-o.spec
 ```
 
@@ -356,7 +356,12 @@ cp RPMS/* ./rpms
 ```
 ##### Create Kubelet RPM from the source RPM
 
-> TODO
+In the same container do:
+
+```sh
+cd /tmp/host
+wget https://download.fedoraproject.org/pub/fedora/linux/releases/35/Everything/source/tree/Packages/o/origin-3.11.2-4.fc35.src.rpm
+```
 
 
 #### Build the FCOS image
